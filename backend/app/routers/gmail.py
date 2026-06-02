@@ -1,6 +1,7 @@
 import logging
+import json
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user, AuthUser
@@ -9,6 +10,36 @@ import app.services.gmail_service as gmail_service
 
 router = APIRouter(prefix="/gmail", tags=["Gmail"])
 logger = logging.getLogger(__name__)
+
+
+def oauth_popup_response(provider: str, success: bool, message: str = "") -> HTMLResponse:
+    status = "success" if success else "error"
+    payload = {
+        "type": "OAUTH_SUCCESS" if success else "OAUTH_ERROR",
+        "provider": provider,
+        "message": message,
+    }
+    return HTMLResponse(f"""
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OAuth {status}</title>
+  </head>
+  <body>
+    <script>
+      const payload = {json.dumps(payload)};
+      if (window.opener) {{
+        window.opener.postMessage(payload, {json.dumps(settings.FRONTEND_URL)});
+      }}
+      window.close();
+      setTimeout(() => {{
+        document.body.textContent = "OAuth {status}. You can close this window.";
+      }}, 300);
+    </script>
+  </body>
+</html>
+""")
 
 
 @router.get("/connect")
@@ -28,10 +59,10 @@ async def callback(
     try:
         await gmail_service.handle_oauth_callback(code, state, db)
         await gmail_service.setup_watch(state, db)
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?connected=gmail")
+        return oauth_popup_response("gmail", True)
     except Exception as e:
         logger.error(f"Gmail callback error: {e}")
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?error=gmail&msg={str(e)[:100]}")
+        return oauth_popup_response("gmail", False, str(e)[:100])
 
 
 @router.post("/webhook")

@@ -47,8 +47,12 @@ function SettingsContent() {
     // Lắng nghe message từ popup trả về cho cửa sổ chính
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OAUTH_SUCCESS') {
-        toast.success(`Connected successfully! ✨`);
+        const provider = event.data.provider || 'Account';
+        toast.success(`${provider.charAt(0).toUpperCase() + provider.slice(1)} connected successfully!`);
         loadAccounts();
+      } else if (event.data?.type === 'OAUTH_ERROR') {
+        const provider = event.data.provider || 'account';
+        toast.error(`Failed to connect ${provider}. Please try again.`);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -97,7 +101,10 @@ function SettingsContent() {
     const height = 700;
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
-    window.open(url, 'oauth_popup', `width=${width},height=${height},top=${top},left=${left}`);
+    const popup = window.open(url, 'oauth_popup', `width=${width},height=${height},top=${top},left=${left}`);
+    if (!popup) {
+      toast.error('Popup was blocked. Please allow popups and try again.');
+    }
   };
 
   const disconnect = async (provider: string) => {

@@ -1,11 +1,12 @@
 import logging
+import json
 import httpx
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.database import get_db
 from app.dependencies import get_current_user, AuthUser
 from app.models import DiscordAccount, Notification
@@ -15,6 +16,36 @@ router = APIRouter(prefix="/discord", tags=["Discord"])
 logger = logging.getLogger(__name__)
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
+
+
+def oauth_popup_response(provider: str, success: bool, message: str = "") -> HTMLResponse:
+    status = "success" if success else "error"
+    payload = {
+        "type": "OAUTH_SUCCESS" if success else "OAUTH_ERROR",
+        "provider": provider,
+        "message": message,
+    }
+    return HTMLResponse(f"""
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OAuth {status}</title>
+  </head>
+  <body>
+    <script>
+      const payload = {json.dumps(payload)};
+      if (window.opener) {{
+        window.opener.postMessage(payload, {json.dumps(settings.FRONTEND_URL)});
+      }}
+      window.close();
+      setTimeout(() => {{
+        document.body.textContent = "OAuth {status}. You can close this window.";
+      }}, 300);
+    </script>
+  </body>
+</html>
+""")
 
 
 @router.get("/connect")
@@ -66,12 +97,21 @@ async def callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
 
         account.discord_id = discord_user.get("id")
         account.username = discord_user.get("username")
+        await db.execute(
+            text("""
+                INSERT INTO user_integrations (user_id, provider, updated_at)
+                VALUES (:user_id, 'discord', NOW())
+                ON CONFLICT (user_id, provider)
+                DO UPDATE SET updated_at = EXCLUDED.updated_at
+            """),
+            {"user_id": state},
+        )
         await db.commit()
 
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?connected=discord")
+        return oauth_popup_response("discord", True)
     except Exception as e:
         logger.error(f"Discord callback error: {e}")
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?error=discord")
+        return oauth_popup_response("discord", False, str(e)[:100])
 
 
 class TestNotificationRequest(BaseModel):

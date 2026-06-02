@@ -8,7 +8,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from app.models import GmailAccount, User
 from app.config import settings
 
@@ -87,6 +87,15 @@ async def handle_oauth_callback(code: str, user_id: str, db: AsyncSession) -> No
     if credentials.expiry:
         account.token_expiry = credentials.expiry
 
+    await db.execute(
+        text("""
+            INSERT INTO user_integrations (user_id, provider, updated_at)
+            VALUES (:user_id, 'gmail', NOW())
+            ON CONFLICT (user_id, provider)
+            DO UPDATE SET updated_at = EXCLUDED.updated_at
+        """),
+        {"user_id": user_id},
+    )
     await db.commit()
     logger.info(f"Gmail connected for user {user_id}: {gmail_email}")
 
