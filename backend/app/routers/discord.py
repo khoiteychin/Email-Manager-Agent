@@ -68,10 +68,10 @@ async def callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
         account.username = discord_user.get("username")
         await db.commit()
 
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?discord=connected")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?connected=discord")
     except Exception as e:
         logger.error(f"Discord callback error: {e}")
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?discord=error")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?error=discord")
 
 
 class TestNotificationRequest(BaseModel):

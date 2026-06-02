@@ -28,10 +28,10 @@ async def callback(
     try:
         await gmail_service.handle_oauth_callback(code, state, db)
         await gmail_service.setup_watch(state, db)
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?gmail=connected")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?connected=gmail")
     except Exception as e:
         logger.error(f"Gmail callback error: {e}")
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?gmail=error&msg={str(e)[:100]}")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/settings?error=gmail&msg={str(e)[:100]}")
 
 
 @router.post("/webhook")
